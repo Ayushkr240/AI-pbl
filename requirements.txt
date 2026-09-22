@@ -1,0 +1,16 @@
+streamlit
+python-dotenv
+langchain
+langchain-core
+langchain-community
+langchain-groq
+langchain-google-genai
+langgraph
+langgraph-checkpoint-sqlite
+langchain-mcp-adapters
+mcp
+faiss-cpu
+pypdf
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
