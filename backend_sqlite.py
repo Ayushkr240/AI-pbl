@@ -1,7 +1,8 @@
 # ==================== 1. IMPORTS ====================
 
 import asyncio
-import sqlite3
+import aiosqlite
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from typing import Annotated, TypedDict
 
 from dotenv import load_dotenv
@@ -136,28 +137,50 @@ User Message:
 
 # ==================== 9. DATABASE & CHECKPOINTER ====================
 
-conn = sqlite3.connect("chatbot.db", check_same_thread=False)
-checkpointer = SqliteSaver(conn=conn)
+# async def get_checkpointer():
+#     conn = await aiosqlite.connect("chatbot.db")
+#     return AsyncSqliteSaver(conn)
+
+# checkpointer = asyncio.run(get_checkpointer())
 
 # ==================== 10. LANGGRAPH GRAPH ====================
 
-graph = StateGraph(ChatState)
-graph.add_node("guardrail_input", guardrail_input_node)
-graph.add_node("retrieve_node", retrieve_node)
-graph.add_node("agent_node", agent_node)
-graph.add_node("guardrail_output", guardrail_output_node)
-graph.add_edge(START, "guardrail_input")
-graph.add_edge("guardrail_input", "retrieve_node")
-graph.add_edge("retrieve_node", "agent_node")
+def create_graph(checkpointer):
+    graph = StateGraph(ChatState)
 
-if MCP_TOOLS:
-    graph.add_node("tools", ToolNode(MCP_TOOLS))
-    graph.add_conditional_edges(
-        "agent_node", tools_condition, {"tools": "tools", END: "guardrail_output"}
-    )
-    graph.add_edge("tools", "agent_node")
-else:
-    graph.add_edge("agent_node", "guardrail_output")
+    graph.add_node("guardrail_input", guardrail_input_node)
+    graph.add_node("retrieve_node", retrieve_node)
+    graph.add_node("agent_node", agent_node)
+    graph.add_node("guardrail_output", guardrail_output_node)
 
-graph.add_edge("guardrail_output", END)
-chatbot = graph.compile(checkpointer=checkpointer)
+    graph.add_edge(START, "guardrail_input")
+    graph.add_edge("guardrail_input", "retrieve_node")
+    graph.add_edge("retrieve_node", "agent_node")
+
+    if MCP_TOOLS:
+        graph.add_node("tools", ToolNode(MCP_TOOLS))
+        graph.add_conditional_edges(
+            "agent_node",
+            tools_condition,
+            {"tools": "tools", END: "guardrail_output"},
+        )
+        graph.add_edge("tools", "agent_node")
+    else:
+        graph.add_edge("agent_node", "guardrail_output")
+
+    graph.add_edge("guardrail_output", END)
+
+    return graph.compile(checkpointer=checkpointer)
+
+# ==================== 11. ASYNC CHATBOT RUNNER ====================
+
+async def run_chatbot(input_data, config):
+    async with AsyncSqliteSaver.from_conn_string("chatbot.db") as checkpointer:
+        chatbot = create_graph(checkpointer)
+
+        result = await chatbot.ainvoke(
+            input_data,
+            config=config,
+        )
+
+        return result

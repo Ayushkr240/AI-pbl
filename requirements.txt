@@ -9,6 +9,7 @@ langgraph
 langgraph-checkpoint-sqlite
 langchain-mcp-adapters
 mcp
+aiosqlite
 faiss-cpu
 pypdf
 google-api-python-client

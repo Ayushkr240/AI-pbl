@@ -74,7 +74,7 @@ def check_input(thread_id: str, text: str) -> GuardrailResult:
         if re.search(pattern, lowered):
             return GuardrailResult(False, "That looks like an attempt to override my instructions, so I can't proceed with it.")
 
-    return GuardrailResult(True, sanitized_text=_redact_pii(text))
+    return GuardrailResult(True, sanitized_text=text)
 
 
 def check_output(text: str) -> GuardrailResult:

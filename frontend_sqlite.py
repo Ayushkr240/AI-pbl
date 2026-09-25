@@ -1,7 +1,10 @@
 import uuid
+import asyncio
+import asyncio
 
+from backend_sqlite import create_graph, generate_chat_title, run_chatbot
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import streamlit as st
-from backend_sqlite import chatbot, generate_chat_title
 from langchain_core.messages import HumanMessage, AIMessage
 from rag.embeddings import save_vectorstore
 from database import (
@@ -46,18 +49,21 @@ def reset_chat():
     add_thread(new_thread)
 
 
-def load_conversation(thread_id):
+async def load_conversation(thread_id):
     """Load conversation from LangGraph checkpointer."""
 
-    state = chatbot.get_state(
-        config={
-            "configurable": {
-                "thread_id": thread_id
-            }
-        }
-    )
+    async with AsyncSqliteSaver.from_conn_string("chatbot.db") as checkpointer:
+        chatbot = create_graph(checkpointer)
 
-    return state.values.get("messages", [])
+        state = await chatbot.aget_state(
+            config={
+                "configurable": {
+                    "thread_id": thread_id
+                }
+            }
+        )
+
+        return state.values.get("messages", [])
 
 
 # ============================================================
@@ -114,7 +120,7 @@ for thread in st.session_state["chat_threads"]:
 
             st.session_state["thread_id"] = thread["id"]
 
-            messages = load_conversation(thread["id"])
+            messages = asyncio.run(load_conversation(thread["id"]))
 
             history = []
 
@@ -342,13 +348,15 @@ if user_input:
 
     with st.chat_message("assistant"):
 
-        result = chatbot.invoke(
-            {
-                "messages": [
-                    HumanMessage(content=user_input)
-                ]
-            },
-            config=CONFIG,
+        result = asyncio.run(
+            run_chatbot(
+                {
+                    "messages": [
+                        HumanMessage(content=user_input)
+                    ]
+                },
+                config=CONFIG,
+            )
         )
 
         ai_response = result["messages"][-1].content
