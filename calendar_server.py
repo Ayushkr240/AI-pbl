@@ -1,29 +1,28 @@
 """
-mcp_servers/email_server.py
-----------------------------
-MCP server exposing Gmail actions as tools:
-    - send_email
-    - list_recent_emails
+mcp_servers/calendar_server.py
+-------------------------------
+MCP server exposing Google Calendar actions as tools:
+    - create_event
+    - list_upcoming_events
 
-This is the "Email Server (Gmail)" box in the architecture diagram.
-It speaks MCP over stdio; mcp_client.py launches it as a subprocess,
-so you normally never run this file directly.
+This is the "Calendar Server (Google Calendar)" box in the architecture
+diagram. Speaks MCP over stdio; launched as a subprocess by mcp_client.py.
 
 One-time setup:
-    1. In Google Cloud Console, enable the Gmail API and create an
-       OAuth "Desktop app" client. Download the JSON as credentials.json
-       and place it in the project root.
-    2. First run will open a browser to authorize; a gmail_token.json
-       is cached afterwards so you won't be prompted again.
+    1. In Google Cloud Console, enable the Google Calendar API on the
+       same OAuth client used for Gmail (or a separate one).
+    2. Reuse credentials.json from the email server setup, or point
+       GOOGLE_CREDENTIALS_PATH at a different file.
+    3. First run opens a browser to authorize; calendar_token.json is
+       cached afterwards.
 
 Env vars (optional overrides):
     GOOGLE_CREDENTIALS_PATH  (default: credentials.json)
-    GMAIL_TOKEN_PATH         (default: gmail_token.json)
+    CALENDAR_TOKEN_PATH      (default: calendar_token.json)
 """
 
-import base64
+import datetime
 import os
-from email.mime.text import MIMEText
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -32,18 +31,15 @@ from googleapiclient.discovery import build
 
 from mcp.server.fastmcp import FastMCP
 
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/gmail.readonly",
-]
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials.json")
-TOKEN_PATH = os.getenv("GMAIL_TOKEN_PATH", "gmail_token.json")
+TOKEN_PATH = os.getenv("CALENDAR_TOKEN_PATH", "calendar_token.json")
 
-mcp = FastMCP("email-server")
+mcp = FastMCP("calendar-server")
 
 
-def _get_gmail_service():
+def _get_calendar_service():
     creds = None
 
     if os.path.exists(TOKEN_PATH):
@@ -61,78 +57,74 @@ def _get_gmail_service():
         with open(TOKEN_PATH, "w") as f:
             f.write(creds.to_json())
 
-    return build("gmail", "v1", credentials=creds)
+    return build("calendar", "v3", credentials=creds)
 
 
 @mcp.tool()
-def send_email(to: str, subject: str, body: str) -> str:
+def create_event(
+    summary: str,
+    start_time: str,
+    end_time: str,
+    description: str = "",
+    timezone: str = "Asia/Kolkata",
+) -> str:
     """
-    Send an email through the user's Gmail account.
+    Create a Google Calendar event on the user's primary calendar.
 
     Args:
-        to: Recipient email address.
-        subject: Email subject line.
-        body: Plain-text email body.
+        summary: Event title.
+        start_time: ISO 8601 start datetime, e.g. "2026-09-18T16:00:00".
+        end_time: ISO 8601 end datetime, e.g. "2026-09-18T17:00:00".
+        description: Optional event description.
+        timezone: IANA timezone name (default "Asia/Kolkata").
     """
-    service = _get_gmail_service()
+    service = _get_calendar_service()
 
-    message = MIMEText(body)
-    message["to"] = to
-    message["subject"] = subject
+    event = {
+        "summary": summary,
+        "description": description,
+        "start": {"dateTime": start_time, "timeZone": timezone},
+        "end": {"dateTime": end_time, "timeZone": timezone},
+    }
 
-    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    created = service.events().insert(calendarId="primary", body=event).execute()
 
-    sent = (
-        service.users()
-        .messages()
-        .send(userId="me", body={"raw": raw})
-        .execute()
-    )
-
-    return f"Email sent to {to} (message id: {sent.get('id')})"
+    return f"Event '{summary}' created: {created.get('htmlLink')}"
 
 
 @mcp.tool()
-def list_recent_emails(max_results: int = 5) -> str:
+def list_upcoming_events(max_results: int = 5) -> str:
     """
-    List the sender and subject of the most recent inbox emails.
+    List the next upcoming events on the user's primary calendar.
 
     Args:
-        max_results: Maximum number of emails to return (default 5).
+        max_results: Maximum number of events to return (default 5).
     """
-    service = _get_gmail_service()
+    service = _get_calendar_service()
 
-    results = (
-        service.users()
-        .messages()
-        .list(userId="me", maxResults=max_results, labelIds=["INBOX"])
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+
+    events_result = (
+        service.events()
+        .list(
+            calendarId="primary",
+            timeMin=now,
+            maxResults=max_results,
+            singleEvents=True,
+            orderBy="startTime",
+        )
         .execute()
     )
 
-    messages = results.get("messages", [])
+    events = events_result.get("items", [])
 
-    if not messages:
-        return "No recent emails found."
+    if not events:
+        return "No upcoming events found."
 
     lines = []
-    for msg in messages:
-        full = (
-            service.users()
-            .messages()
-            .get(
-                userId="me",
-                id=msg["id"],
-                format="metadata",
-                metadataHeaders=["From", "Subject"],
-            )
-            .execute()
-        )
-
-        headers = {h["name"]: h["value"] for h in full["payload"]["headers"]}
-        lines.append(
-            f"From: {headers.get('From', 'Unknown')} | "
-            f"Subject: {headers.get('Subject', '(no subject)')}"
-        )
+    for event in events:
+        start = event["start"].get("dateTime", event["start"].get("date"))
+        lines.append(f"{start} — {event.get('summary', '(no title)')}")
 
     return "\n".join(lines)
 

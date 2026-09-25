@@ -1,7 +1,7 @@
 import uuid
 
 import streamlit as st
-from backend_sqlite import chatbot, generate_chat_title,retrieve_all_threads
+from backend_sqlite import chatbot, generate_chat_title
 from langchain_core.messages import HumanMessage, AIMessage
 from rag.embeddings import save_vectorstore
 from database import (
@@ -159,12 +159,16 @@ for thread in st.session_state["chat_threads"]:
                 key=f"save_{thread['id']}",
                 use_container_width=True,
             ):
+                new_title = new_name.strip() or "New Chat"
 
-                thread["title"] = new_name.strip() or "New Chat"
+                rename_thread(
+                    thread["id"],
+                    new_title,
+                )
+
+                st.session_state["chat_threads"] = get_all_threads()
 
                 st.rerun()
-
-            st.divider()
 
             # -------------------
             # Delete
