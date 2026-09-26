@@ -1,8 +1,9 @@
 import uuid
 import asyncio
 import asyncio
-
-from backend_sqlite import create_graph, generate_chat_title, run_chatbot
+import hashlib
+from groq import Groq
+from backend_sqlite import create_graph, generate_chat_title, run_chatbot , transcribe_audio
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage
@@ -87,6 +88,9 @@ if "uploaded_pdf" not in st.session_state:
     
 if "attachment_key" not in st.session_state:
     st.session_state["attachment_key"] = 0
+
+if "voice_input_key" not in st.session_state:
+    st.session_state["voice_input_key"] = 0
 # ============================================================
 # Sidebar
 # ============================================================
@@ -240,16 +244,59 @@ for message in st.session_state["message_history"]:
 # User Input
 # ============================================================
 
-# user_input = st.chat_input("Type here...")
-chat_data = st.chat_input(
-    "Type here...",
-    accept_file=True,
-    file_type=["pdf"],
-)
-
 user_input = None
+chat_data = None
+voice_data = None
 
-if chat_data is not None:
+
+# ============================================================
+# Bottom Input Area
+# ============================================================
+
+with st.bottom:
+
+    # -------------------------
+    # Text Input
+    # -------------------------
+
+    chat_data = st.chat_input(
+        "Type here...",
+        accept_file=True,
+        file_type=["pdf"],
+    )
+
+    # -------------------------
+    # Voice Input
+    # -------------------------
+
+    voice_data = st.audio_input(
+        "🎤 Record your voice",
+        key=f"voice_input_{st.session_state['voice_input_key']}"
+    )
+
+
+# ============================================================
+# Handle Voice Input
+# ============================================================
+
+if voice_data is not None:
+
+    with st.spinner("Converting speech to text..."):
+
+        user_input = transcribe_audio(
+            voice_data.getvalue()
+        )
+
+    # Force a fresh microphone widget
+    st.session_state["voice_input_key"] += 1
+
+
+# ============================================================
+# Handle Text Input
+# ============================================================
+
+if user_input is None and chat_data is not None:
+
     user_input = chat_data.text
 
     if chat_data.files:

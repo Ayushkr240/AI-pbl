@@ -1,252 +1,698 @@
-# AI Voice Assistant & Productivity Copilot
+# 🤖 AI Voice Assistant & Productivity Copilot
 
-This project is a personal AI assistant designed to combine conversational intelligence with practical productivity actions. It goes beyond a simple chatbot: it can answer questions from uploaded documents, maintain long-running threaded conversations, and act on external tools such as Gmail and Google Calendar through the Model Context Protocol (MCP). The system is built around a LangGraph agent, a retrieval-augmented generation (RAG) pipeline, persistent SQLite memory, and safety guardrails to keep responses reliable and user-safe.
+A full-stack conversational AI assistant built with **Streamlit, LangGraph, Groq, RAG, SQLite, and MCP**.
 
----
-
-## Project vision
-
-The goal of this project is to create an AI assistant that feels more like a real digital productivity companion than a static Q&A bot. In practice, that means the assistant can:
-
-- chat naturally in a multi-threaded interface
-- answer questions grounded in uploaded PDFs and knowledge documents
-- remember previous conversations within a thread
-- decide when to use external tools such as email or calendar actions
-- block unsafe or manipulative requests before they affect model behavior
-- provide a foundation that can later evolve into a voice-first assistant experience
-
-This is why the system is designed as a full agentic workflow rather than only a document chatbot.
+The assistant can hold persistent multi-threaded conversations, answer questions from uploaded PDFs, accept **voice input**, and perform real-world productivity actions such as **sending emails and managing Google Calendar events** through MCP.
 
 ---
 
-## Core capabilities
+## ✨ Features
 
-- Conversational AI with multi-thread chat history
-- Persistent memory using SQLite checkpoints
-- PDF upload and knowledge retrieval using FAISS + embeddings
-- Retrieval-augmented generation for grounded responses
-- Tool-calling via MCP for Gmail and Google Calendar
-- Input/output guardrails for prompt injection, unsafe content, and PII handling
-- Streamlit-based desktop-style frontend for local interaction
-- Automatic conversation titles for easier organization
+### 💬 Conversational AI
+
+- Natural multi-turn conversations
+- Persistent chat threads
+- Create, rename, delete, and resume conversations
+- Automatic conversation titles
+- SQLite-backed conversation persistence
+
+### 🎤 Voice Input
+
+- Record voice directly from the Streamlit interface
+- Speech-to-text using **Groq Whisper Large V3 Turbo**
+- Voice input is converted into normal text input
+- Voice and text follow the same chatbot workflow
+- Fresh microphone instance after every recording
+- Voice input works across different chat threads
+
+### 📄 RAG — Retrieval Augmented Generation
+
+- Upload PDF documents directly from the chat interface
+- Extract and split document content
+- Generate embeddings
+- Store vectors using FAISS
+- Retrieve relevant document context
+- Generate answers grounded in uploaded documents
+
+### 🧠 LangGraph Agent
+
+The chatbot is orchestrated using LangGraph with:
+
+- Input guardrails
+- Document retrieval
+- LLM reasoning
+- MCP tool execution
+- Output guardrails
+- Persistent checkpointing
+
+### 🔧 MCP Tool Integration
+
+The assistant can interact with external services through the **Model Context Protocol (MCP)**.
+
+#### 📧 Gmail MCP
+
+- Read emails
+- Search emails
+- Send emails
+
+#### 📅 Google Calendar MCP
+
+- Read upcoming events
+- Interact with Google Calendar
+- Create calendar events where supported
+
+### 🛡️ Guardrails
+
+- Prompt-injection protection
+- Unsafe-content filtering
+- Input validation
+- Output filtering
+- PII protection
+- Protection against leaking internal instructions
 
 ---
 
-## Architecture overview
+# 🏗️ Architecture
 
 ```text
-                         ┌────────────────────────────┐
-                         │        Streamlit UI       │
-                         │      Frontend App         │
-                         └──────────────┬─────────────┘
+                         ┌──────────────────────────────┐
+                         │        Streamlit UI          │
+                         │      frontend_sqlite.py      │
+                         └──────────────┬───────────────┘
+                                        │
+                     ┌──────────────────┴──────────────────┐
+                     │                                     │
+                     ▼                                     ▼
+                ⌨️ Text Input                         🎤 Voice Input
+                     │                                     │
+                     │                              Audio Recording
+                     │                                     │
+                     │                                     ▼
+                     │                              Groq Whisper
+                     │                           Large V3 Turbo STT
+                     │                                     │
+                     │                                     ▼
+                     │                              Transcribed Text
+                     │                                     │
+                     └──────────────────┬──────────────────┘
                                         │
                                         ▼
-                         ┌────────────────────────────┐
-                         │       LangGraph Agent      │
-                         │  Guardrails + Retrieval    │
-                         │       + LLM orchestration  │
-                         └──────────────┬─────────────┘
-                                        │
-            ┌───────────────────────────┼───────────────────────────┐
-            │                           │                           │
-            ▼                           ▼                           ▼
-┌────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐
-│ SQLite Memory      │     │ RAG Layer            │     │ MCP Tool Servers      │
-│ Thread state       │     │ FAISS + embeddings   │     │ Gmail / Calendar      │
-│ Conversation logs  │     │ PDF chunk search     │     │ external actions      │
-└────────────────────┘     └──────────────────────┘     └──────────────────────┘
-            │                           │                           │
-            └───────────────────────────┴───────────────────────────┘
+                                  user_input
                                         │
                                         ▼
-                         ┌────────────────────────────┐
-                         │      LLM Response          │
-                         │  (Groq / model provider)  │
-                         └────────────────────────────┘
+                         ┌──────────────────────────────┐
+                         │       LangGraph Agent        │
+                         └──────────────┬───────────────┘
+                                        │
+                                        ▼
+                              ┌───────────────────┐
+                              │  Input Guardrail  │
+                              └─────────┬─────────┘
+                                        │
+                                        ▼
+                              ┌───────────────────┐
+                              │   RAG Retrieval   │
+                              └─────────┬─────────┘
+                                        │
+                                        ▼
+                              ┌───────────────────┐
+                              │    Agent / LLM    │
+                              └─────────┬─────────┘
+                                        │
+                              ┌─────────┴─────────┐
+                              │                   │
+                              ▼                   ▼
+                       Normal Response       MCP Tool Call
+                                                  │
+                                    ┌─────────────┴─────────────┐
+                                    │                           │
+                                    ▼                           ▼
+                              Gmail MCP                 Calendar MCP
+                                    │                           │
+                                    ▼                           ▼
+                               Gmail API                 Calendar API
+                                    │                           │
+                                    └─────────────┬─────────────┘
+                                                  │
+                                                  ▼
+                                      ┌────────────────────┐
+                                      │ Output Guardrail   │
+                                      └──────────┬─────────┘
+                                                 │
+                                                 ▼
+                                         Streamlit Response
 ```
 
 ---
 
-## Tech stack
+# 🔄 Chatbot Workflow
 
-| Layer | Technology |
-| --- | --- |
-| Application UI | Streamlit |
-| Agent orchestration | LangGraph |
-| LLM integration | LangChain + Groq / model provider |
-| Embeddings | Google Generative AI embeddings |
-| Vector search | FAISS |
-| Memory | SQLite |
-| Knowledge retrieval | RAG pipeline |
-| External tools | MCP (Model Context Protocol) |
-| Google integrations | Gmail API, Google Calendar API |
-| Safety | custom rule-based guardrails |
-| Runtime | Python |
+```text
+User
+ │
+ ├── Text
+ │     │
+ │     └──────────────────┐
+ │                        │
+ └── Voice                │
+       │                  │
+       ▼                  │
+ Groq Whisper             │
+       │                  │
+       ▼                  │
+ Transcribed Text ────────┘
+              │
+              ▼
+        Input Guardrail
+              │
+              ▼
+         RAG Retrieval
+              │
+              ▼
+           Agent
+              │
+       ┌──────┴──────┐
+       │             │
+       ▼             ▼
+   Normal LLM      MCP Tool
+                     │
+              ┌──────┴──────┐
+              ▼             ▼
+           Gmail         Calendar
+              │             │
+              └──────┬──────┘
+                     ▼
+              Output Guardrail
+                     │
+                     ▼
+                  Response
+```
 
 ---
 
-## Repository structure
+# 🧩 LangGraph Architecture
+
+The current LangGraph workflow consists of:
 
 ```text
-.
-├── backend_sqlite.py          # LangGraph chatbot logic and memory orchestration
-├── frontend_sqlite.py         # Streamlit interface and chat/thread management
-├── database.py                # SQLite thread metadata storage
-├── guardrails.py              # Input/output filtering and PII safeguards
-├── calendar_server.py         # Google Calendar MCP server
-├── mcp_client.py              # Client that connects to MCP tool servers
-├── requirements.txt           # Python dependencies
-├── README.md                  # Project overview and setup guide
-├── SETUP_PHASE1.md            # Setup notes for initial project phase
-├── rag/                       # Retrieval and document-processing components
+START
+  │
+  ▼
+guardrail_input
+  │
+  ▼
+retrieve_node
+  │
+  ▼
+agent_node
+  │
+  ├───────────────┐
+  │               │
+  │          Tool requested
+  │               │
+  │               ▼
+  │           ToolNode
+  │               │
+  │               ▼
+  │          agent_node
+  │
+  ▼
+guardrail_output
+  │
+  ▼
+ END
+```
+
+The graph uses asynchronous execution because the MCP tools and SQLite checkpointing require async-compatible execution.
+
+---
+
+# 🗄️ Persistence
+
+The project uses SQLite for persistent state.
+
+### LangGraph Checkpointing
+
+```text
+LangGraph
+    │
+    ▼
+AsyncSqliteSaver
+    │
+    ▼
+chatbot.db
+```
+
+This allows conversations to continue across application reruns.
+
+### Thread Metadata
+
+Thread information such as:
+
+- Thread ID
+- Chat title
+- Rename state
+- Deleted threads
+
+is managed separately through `database.py`.
+
+---
+
+# 📚 RAG Pipeline
+
+```text
+PDF Upload
+     │
+     ▼
+Document Loader
+     │
+     ▼
+Text Splitting
+     │
+     ▼
+Embeddings
+     │
+     ▼
+FAISS Vector Store
+     │
+     ▼
+Similarity Retrieval
+     │
+     ▼
+Relevant Context
+     │
+     ▼
+LangGraph Agent
+     │
+     ▼
+Grounded Response
+```
+
+---
+
+# 🎤 Voice Pipeline
+
+Voice input is intentionally separated from the main chatbot workflow.
+
+```text
+Microphone
+     │
+     ▼
+Streamlit Audio Input
+     │
+     ▼
+Audio Bytes
+     │
+     ▼
+backend_sqlite.py
+     │
+     ▼
+Groq Whisper Large V3 Turbo
+     │
+     ▼
+Text
+     │
+     ▼
+Existing Chatbot Workflow
+```
+
+The microphone itself belongs to the frontend, while audio-to-text processing belongs to the backend.
+
+After an audio recording is processed, the frontend creates a fresh microphone widget so the user can immediately make another recording.
+
+---
+
+# 🔧 MCP Architecture
+
+```text
+                    LangGraph Agent
+                          │
+                          ▼
+                      ToolNode
+                          │
+                          ▼
+                      MCP Client
+                          │
+             ┌────────────┴────────────┐
+             │                         │
+             ▼                         ▼
+        Gmail MCP                Calendar MCP
+             │                         │
+             ▼                         ▼
+        Gmail API               Google Calendar API
+```
+
+MCP allows the assistant to interact with external services without tightly coupling those services to the LangGraph agent.
+
+---
+
+# 🛠️ Tech Stack
+
+| Layer                  | Technology                   |
+| ---------------------- | ---------------------------- |
+| Frontend               | Streamlit                    |
+| Programming Language   | Python 3.11                  |
+| Agent Orchestration    | LangGraph                    |
+| LLM Framework          | LangChain                    |
+| LLM                    | Groq                         |
+| Speech-to-Text         | Groq Whisper Large V3 Turbo  |
+| RAG                    | LangChain + FAISS            |
+| Embeddings             | Google Generative AI         |
+| Vector Database        | FAISS                        |
+| Conversation Memory    | SQLite                       |
+| Async SQLite           | aiosqlite / AsyncSqliteSaver |
+| External Tool Protocol | MCP                          |
+| Email Integration      | Gmail API                    |
+| Calendar Integration   | Google Calendar API          |
+| Authentication         | Google OAuth                 |
+| Environment Management | python-dotenv                |
+
+---
+
+# 📁 Project Structure
+
+```text
+AI-voice-assistant/
+│
+├── backend_sqlite.py          # LangGraph backend, LLM, STT and checkpointing
+├── frontend_sqlite.py         # Streamlit UI, chat threads, PDF and voice input
+├── database.py                # Chat thread metadata
+├── guardrails.py              # Input/output safety and PII handling
+│
+├── mcp_client.py              # MCP client and tool loading
+├── email_server.py            # Gmail MCP server
+├── calender_server.py         # Google Calendar MCP server
+│
+├── rag/
 │   ├── __init__.py
-│   ├── embeddings.py
-│   ├── loader.py
-│   ├── prompts.py
-│   ├── retriever.py
-│   └── ...
-├── .gitignore
-└── .env.example (optional)   # if you add a local env template
+│   ├── embeddings.py          # Embedding and vectorstore operations
+│   ├── loader.py              # PDF loading and text splitting
+│   ├── prompts.py             # RAG / agent prompts
+│   └── retriever.py           # Document retrieval
+│
+├── requirements.txt           # Python dependencies
+├── README.md                  # Project documentation
+├── .gitignore                 # Ignored files and secrets
+│
+└── .env                       # Local environment variables
 ```
 
----
-
-## How it works
-
-1. The user opens the Streamlit app and starts or resumes a chat thread.
-2. The assistant checks the latest user message through guardrails.
-3. If the query is relevant to uploaded documents, the app retrieves matching chunks from the FAISS vector store.
-4. The LangGraph workflow combines:
-   - conversation history
-   - retrieved context
-   - the latest user message
-5. The model generates the response using that combined context.
-6. If the user asks to send email or manage calendar tasks, the agent may invoke MCP tools connected to Google services.
-7. All thread data and conversation state are stored in SQLite for continuity across sessions.
+> `.env`, OAuth credentials, tokens, databases, and other sensitive/generated files should not be committed to GitHub.
 
 ---
 
-## Getting started
+# 🚀 Getting Started
 
-### 1. Clone the repository
+## 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd Ai-Assistant-Chatbot
+git clone <your-repository-url>
+cd AI-voice-assistant
 ```
 
-### 2. Create a virtual environment
+## 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
 ```
 
-Activate it:
+### Windows
 
-Windows:
-
-```bash
+```powershell
 .venv\Scripts\activate
 ```
 
-macOS/Linux:
+### macOS / Linux
 
 ```bash
 source .venv/bin/activate
 ```
 
-### 3. Install dependencies
+## 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+Important pinned versions include:
 
-Create a `.env` file in the project root with the keys required by the LLM and Google integrations.
-
-```env
-GOOGLE_API_KEY="your_google_api_key"
-GROQ_API_KEY="your_groq_api_key"
+```text
+streamlit==1.64.0
+langchain-groq==1.1.3
+groq==0.37.1
 ```
-
-If you want to enable the Gmail and Calendar tool integrations, also prepare the Google OAuth credentials for the project and ensure the relevant Google Cloud APIs are enabled.
 
 ---
 
-## Running the app
+# 🔐 Environment Variables
 
-Start the Streamlit app:
+Create a `.env` file in the project root.
+
+Example:
+
+```env
+GROQ_API_KEY="your_groq_api_key"
+GOOGLE_API_KEY="your_google_api_key"
+```
+
+For Gmail and Google Calendar MCP integration, configure the required Google OAuth credentials and tokens according to the MCP server configuration.
+
+### Never commit
+
+```text
+.env
+credentials.json
+gmail_token.json
+API keys
+OAuth credentials
+access tokens
+```
+
+---
+
+# ▶️ Running the Application
+
+Start the Streamlit application:
 
 ```bash
 streamlit run frontend_sqlite.py
 ```
 
-Once the app is running, you can:
+The application will open in your browser.
 
-- create a new chat thread
-- upload a PDF for knowledge retrieval
-- ask questions grounded in the uploaded material
-- use the assistant in a threaded conversation
-- trigger external actions when appropriate via MCP-backed tools
+You can then:
 
----
-
-## Safety and trust features
-
-The assistant is intentionally designed with safeguards so it is not just a raw model wrapper:
-
-- prompt-injection detection
-- blocked-topic filtering
-- input length and rate-limit checks
-- PII redaction in user input/output
-- output-side leak prevention for internal instructions
-- tool use restricted to clear user intent
-
-This matters because the app is intended to operate as a personal assistant with real-world actions, not just a passive chat interface.
+- Create a chat
+- Continue previous conversations
+- Rename chats
+- Delete chats
+- Upload PDFs
+- Ask questions about uploaded documents
+- Use voice input
+- Send emails through Gmail MCP
+- Query Google Calendar
+- Perform supported calendar actions
 
 ---
 
-## Why this project matters
+# 🧪 Example Prompts
 
-This repository represents a practical blueprint for an AI-powered personal assistant that can:
+### Normal Chat
 
-- understand ongoing conversations
-- ground answers in user documents
-- operate securely in a bounded tool environment
-- connect to real productivity workflows like email and scheduling
+```text
+Explain what an API is.
+```
 
-It is a strong starting point for a voice-enabled AI productivity assistant, a document-aware copilot, or a personal knowledge assistant.
+### RAG
+
+Upload a PDF and ask:
+
+```text
+Summarize chapter 3.
+```
+
+or:
+
+```text
+What are the main conclusions of this document?
+```
+
+### Voice
+
+Record:
+
+```text
+What is the difference between TCP and UDP?
+```
+
+The voice is converted to text and then follows the normal chatbot workflow.
+
+### Gmail MCP
+
+```text
+List my recent emails.
+```
+
+or:
+
+```text
+Send an email to my email address with subject "MCP Test"
+and body "This is an MCP integration test."
+```
+
+### Calendar MCP
+
+```text
+What are my upcoming calendar events?
+```
 
 ---
 
-## Future direction
+# 🛡️ Safety Features
 
-The project is already structured for expansion toward a richer assistant experience, including:
+The assistant includes multiple layers of protection:
 
-- voice input and spoken responses
-- source citations for document-grounded answers
-- smarter multi-document knowledge management
-- agent personalization and memory improvements
-- more productivity tools beyond email and calendar
-- better orchestration for complex task workflows
+- Prompt-injection detection
+- Unsafe-content filtering
+- Input validation
+- Input length checks
+- PII handling
+- Output filtering
+- Protection against exposing internal instructions
+- Controlled MCP tool usage
 
----
-
-## Contributing
-
-Contributions are welcome. If you want to improve the assistant, add features, or extend the tool layer, open a pull request with a clear summary and relevant testing.
+The goal is to prevent the LLM from blindly executing external actions without appropriate user intent.
 
 ---
 
-## License
+# ⚡ Important Async Architecture
 
-This project is provided for learning and personal use. Add your preferred license if you plan to distribute or publish it more broadly.
+The project uses asynchronous execution for MCP and SQLite checkpointing.
+
+The chatbot is executed using:
+
+```python
+await chatbot.ainvoke(...)
+```
+
+through the asynchronous chatbot runner.
+
+The project uses:
+
+```python
+AsyncSqliteSaver
+```
+
+instead of the synchronous:
+
+```python
+SqliteSaver
+```
+
+This is important because MCP tools are asynchronous.
+
+Do not change this architecture to:
+
+```python
+chatbot.invoke(...)
+```
+
+or:
+
+```python
+SqliteSaver
+```
+
+without redesigning the corresponding execution flow.
 
 ---
 
-## Author
+# 🧠 Design Philosophy
 
-Ayush Kumar
+The project is designed around a simple principle:
 
-GitHub: https://github.com/Ayushkr240
+> **Different input methods should converge into the same chatbot workflow.**
+
+Whether the user enters:
+
+```text
+⌨️ Text
+```
+
+or:
+
+```text
+🎤 Voice
+```
+
+the system eventually produces:
+
+```python
+user_input
+```
+
+and sends it through the same:
+
+```text
+Guardrails
+    ↓
+RAG
+    ↓
+LangGraph Agent
+    ↓
+MCP
+    ↓
+Response
+```
+
+This keeps the architecture modular and makes it easier to add future input methods.
+
+---
+
+# 🔮 Future Improvements
+
+Potential future improvements include:
+
+- True token-by-token response streaming
+- Improved Streamlit UI/UX
+- Better RAG retrieval and reranking
+- Automated unit and integration tests
+- More MCP integrations
+- Confirmation workflows for sensitive actions
+- Better MCP error handling
+- Voice output / text-to-speech
+- Improved deployment architecture
+- More advanced conversation memory
+- Production-grade authentication
+
+---
+
+# 📌 Current Status
+
+The current working version includes:
+
+- ✅ Streamlit chatbot
+- ✅ LangGraph agent
+- ✅ Groq LLM
+- ✅ RAG with PDF uploads
+- ✅ FAISS vector retrieval
+- ✅ Persistent SQLite conversations
+- ✅ Async SQLite checkpointing
+- ✅ Chat threads
+- ✅ Rename/delete chat
+- ✅ Input/output guardrails
+- ✅ Voice input
+- ✅ Groq Whisper Large V3 Turbo STT
+- ✅ Gmail MCP
+- ✅ Google Calendar MCP
+- ✅ Email sending through MCP
+- ✅ Calendar interaction through MCP
+- ✅ Multiple MCP tools in the same chatbot workflow
+
+---
+
+## 👨‍💻 Author
+
+**Khushi Kumari , Ayush Kumar**
+
+Built as an AI/ML project focused on combining conversational AI, RAG, agentic workflows, MCP integrations, and voice interaction into a single productivity assistant.

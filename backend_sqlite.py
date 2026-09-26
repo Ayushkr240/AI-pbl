@@ -1,10 +1,10 @@
 # ==================== 1. IMPORTS ====================
-
+import os
 import asyncio
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from typing import Annotated, TypedDict
-
+from groq import Groq
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -22,6 +22,26 @@ from rag.retriever import format_context, retrieve_documents
 # ==================== 2. ENVIRONMENT & MODEL / MCP SETUP ====================
 
 load_dotenv()
+
+# ==================== VOICE / STT ====================
+
+def transcribe_audio(audio_bytes: bytes) -> str:
+    """
+    Convert audio bytes into text using Groq Whisper.
+    """
+
+    client = Groq(
+        api_key=os.getenv("GROQ_API_KEY")
+    )
+
+    transcription = client.audio.transcriptions.create(
+        file=("recording.wav", audio_bytes),
+        model="whisper-large-v3-turbo",
+        response_format="json",
+        temperature=0.0,
+    )
+
+    return transcription.text.strip()
 
 llm = ChatGroq(
     model="openai/gpt-oss-120b",
